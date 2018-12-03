@@ -19,9 +19,9 @@
 // 映射文件到内存
 int MapFile( int fd , void ** outDataPtr, size_t mapSize , struct stat * stat);
 // 执行文件
-void ProcessFile( char * inPathName , char * string);
+int ProcessFile( char * inPathName , char * string);
 
-void ProcessFile( char * inPathName , char * string)
+int ProcessFile( char * inPathName , char * string)
 {
     size_t originLength;  // 原数据字节数
     size_t dataLength;    // 数据字节数
@@ -38,7 +38,7 @@ void ProcessFile( char * inPathName , char * string)
     if( fd < 0 )
     {
         outError = errno;
-        return;
+        return 1;
     }
     
     // 获取文件状态
@@ -46,7 +46,7 @@ void ProcessFile( char * inPathName , char * string)
     if( fsta != 0 )
     {
         outError = errno;
-        return;
+        return 1;
     }
     
     // 需要映射的文件大小
@@ -78,6 +78,8 @@ void ProcessFile( char * inPathName , char * string)
         // 映射失败
         NSLog(@"映射失败");
     }
+    close(fd);
+    return 0;
 }
 // MapFile
 
@@ -107,7 +109,7 @@ int MapFile( int fd, void ** outDataPtr, size_t mapSize , struct stat * stat)
     
     // * outDataPtr 文本内容
     
-    //    NSLog(@"映射出的文本内容：%s", * outDataPtr);
+//        NSLog(@"映射出的文本内容：%s", * outDataPtr);
     if( *outDataPtr == MAP_FAILED )
     {
         outError = errno;
@@ -126,23 +128,49 @@ int MapFile( int fd, void ** outDataPtr, size_t mapSize , struct stat * stat)
 @interface ViewController ()
 @property (weak, nonatomic) IBOutlet UITextView *mTV;
 @property (copy, nonatomic) NSString *fullpath;
+@property (copy, nonatomic) NSString *mapFullpath;
+
+@property (strong, nonatomic, nonnull) NSFileManager *fileManager;
 
 @end
 
 @implementation ViewController
 
-- (NSString *)getfullPath {
+- (NSString *)getFilefullPath {
     if (_fullpath.length == 0) {
+        
         NSString *path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         NSString *filePath = [NSString stringWithFormat:@"%@/text.txt",path];
+        
+        if (![self.fileManager fileExistsAtPath:filePath]) {
+//            [self.fileManager createDirectoryAtPath:filePath withIntermediateDirectories:YES attributes:nil error:NULL];
+            [self.fileManager createFileAtPath:filePath contents:nil attributes:nil];
+        }
+        
         self.fullpath = filePath;
     }
     return _fullpath;
 }
 
+- (NSString *)getMapfullPath {
+    if (_mapFullpath.length == 0) {
+        NSString *path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *filePath = [NSString stringWithFormat:@"%@/mapText.txt",path];
+        
+        if (![self.fileManager fileExistsAtPath:filePath]) {
+            [self.fileManager createFileAtPath:filePath contents:nil attributes:nil];
+//            [self.fileManager createDirectoryAtPath:filePath withIntermediateDirectories:YES attributes:nil error:NULL];
+        }
+        
+        self.mapFullpath = filePath;
+    }
+    return _mapFullpath;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    self.fileManager = [NSFileManager new];
     
     [self eventAction];
 }
@@ -162,19 +190,13 @@ CGFloat LogTimeBlock (void (^block)(void)) {
 
 -  (void)eventAction {
     
-    NSString *filePath = [self getfullPath];
-    NSLog(@"文件路径：%@", filePath);
+    NSString *mapFilePath = [self getMapfullPath];
+    NSString *filePath = [self getFilefullPath];
     
-    CGFloat time = LogTimeBlock(^{
-        for (int i=0; i<100; i++) {
-            ProcessFile([filePath UTF8String], [[NSString stringWithFormat:@"-%d", i] UTF8String]);
-        }
-    });
-    NSLog(@"ProcessFile writeFile %@ms", @(time));
-    
-
+    // 普通存储
+    NSLog(@"start");
     CGFloat time1 = LogTimeBlock(^{
-        for (int i=0; i<100; i++) {
+        for (int i=0; i<5000; i++) {
             // 取
             NSString *result = [NSString stringWithContentsOfFile:filePath encoding:NSUTF8StringEncoding error:nil];
             // 存
@@ -182,7 +204,18 @@ CGFloat LogTimeBlock (void (^block)(void)) {
             [str writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
         }
     });
-    NSLog(@"File writeFile %@ms", @(time1));
+    NSLog(@"File writeFile %@s", @(time1));
 
+    // 映射的方式
+    CGFloat time = LogTimeBlock(^{
+        for (int i=0; i<5000; i++) {
+            int result = ProcessFile([mapFilePath UTF8String], [[NSString stringWithFormat:@"-%d", i] UTF8String]);
+            if (result == 1) {
+                NSLog(@"发生错误啦");
+            }
+        }
+    });
+    NSLog(@"ProcessFile writeFile %@s", @(time));
+    NSLog(@"end");
 }
 @end
